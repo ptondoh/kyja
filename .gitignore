@@ -41,5 +41,5 @@ Thumbs.db
 tmp/
 uploads/temp/
 
-# Claude Code — inclus intentionnellement (configuration du projet)
-# .claude/ est volontairement NON ignoré
+# Claude Code — configuration locale, non versionnée
+.claude/
