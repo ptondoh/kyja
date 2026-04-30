@@ -41,5 +41,5 @@ Thumbs.db
 tmp/
 uploads/temp/
 
-# Claude Code — configuration locale, non versionnée
-.claude/
+# Claude Code — settings.local.json uniquement exclu (contient des configs personnelles)
+.claude/settings.local.json
