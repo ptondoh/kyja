@@ -1,7 +1,12 @@
 # Variables d'environnement — ne jamais commiter
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+!.env.local.example
+
+# Environnement virtuel Python
+backend/venv/
 
 # Python
 __pycache__/
