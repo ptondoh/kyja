@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
+    ENCRYPTION_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     R2_SECRET_ACCESS_KEY: str = ""
     R2_BUCKET_NAME: str = "kyja-beaute"
     R2_PUBLIC_URL: str = ""
+    LOCAL_STORAGE_DIR: str = "media_storage"
     RESEND_API_KEY: str = ""
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: str = "http://localhost:3000"

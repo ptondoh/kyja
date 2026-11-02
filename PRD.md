@@ -25,7 +25,7 @@ Concevoir une plateforme numérique robuste et élégante pour le salon **KYJA B
 ## 3. Planification des Versions (Feuille de Route)
 
 ### **Phase 1 : MVP (Produit Minimum Viable)**
-* **Catalogue :** Présentation par tuiles des prestations de **KYJA BEAUTÉ**, des articles et des coiffures avec galeries d'images et prix dynamiques[cite: 1].
+* **Catalogue :** Présentation par tuiles des prestations de **KYJA BEAUTÉ**, des articles et des coiffures avec galeries d'images **et de courtes vidéos** (ex: démonstration d'une coiffure, résultat avant/après) et prix dynamiques[cite: 1].
 * **Réservation :** Calendrier de base lié aux disponibilités des coiffeuses du salon[cite: 1].
 * **Profil Client :** Inscription conforme aux lois canadiennes (LPRPDE), historique des prestations et droit à l'oubli[cite: 1].
 * **Paiement :** Indication "Paiement au salon (Cash/Interac)"[cite: 1].
@@ -56,6 +56,11 @@ Concevoir une plateforme numérique robuste et élégante pour le salon **KYJA B
 ### **C. Logistique et Inventaire**
 * **Livraison :** Notifications d'étapes ("En route", "Arrivé") avec preuve photographique obligatoire pour garantir la réception des produits[cite: 1].
 * **Inventaire Hybride :** Rappel automatique de mise à jour après chaque vente au comptoir pour éviter les ruptures de stock en ligne[cite: 1].
+
+### **D. Catalogue Multimédia (Prestations et Produits)**
+* **Galeries mixtes :** Chaque prestation ou produit peut présenter plusieurs images ET vidéos courtes (ex: démonstration du geste, résultat avant/après)[cite: 1].
+* **Formats acceptés :** Vidéos courtes uniquement (quelques secondes à ~1 minute) pour garantir un temps de chargement rapide sur mobile[cite: 1].
+* **Lecture :** Lecture en ligne (streaming) directement dans la fiche de la prestation/produit, sans téléchargement requis par la cliente[cite: 1].
 
 ---
 

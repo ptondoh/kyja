@@ -8,6 +8,9 @@
 # Environnement virtuel Python
 backend/venv/
 
+# Fichiers uploadés (stockage local de dev — contenu généré, pas versionné)
+backend/media_storage/
+
 # Python
 __pycache__/
 *.py[cod]

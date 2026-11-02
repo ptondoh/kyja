@@ -15,8 +15,8 @@ Application de gestion de salon de coiffure multi-phases (MVP → V1 → V2), av
 | **Base de données** | PostgreSQL | Données transactionnelles et relationnelles |
 | **ORM** | SQLAlchemy 2.0 + Alembic | Accès BDD, migrations |
 | **Cache / Broker** | Redis | Disponibilités, sessions, rate limiting, broker Celery |
-| **Tâches async** | Celery + Celery Beat | Rappels RDV, envois email, traitement images |
-| **Stockage fichiers** | Cloudflare R2 + CDN | Images galerie, preuves de livraison, portfolios |
+| **Tâches async** | Celery + Celery Beat | Rappels RDV, envois email, traitement images et vidéos |
+| **Stockage fichiers** | Cloudflare R2 + CDN | Images et vidéos galerie, preuves de livraison, portfolios |
 | **Auth** | JWT + bcrypt + refresh tokens | Authentification sécurisée |
 | **Email** | Resend | Confirmations RDV, statuts livraison |
 | **Push notifications** | Web Push API (PWA) | Alertes temps-réel clientes |
@@ -32,7 +32,7 @@ Application de gestion de salon de coiffure multi-phases (MVP → V1 → V2), av
 ```
 VPS (Hostinger / OVH)
 ├── FastAPI          → Uvicorn + Gunicorn (port 8000)
-├── Celery Worker    → Tâches asynchrones (rappels, emails, traitement images)
+├── Celery Worker    → Tâches asynchrones (rappels, emails, traitement images/vidéos)
 ├── Celery Beat      → Planificateur cron (rappels J-1 et H-2)
 ├── PostgreSQL       → Option managée du fournisseur VPS
 ├── Redis            → Cache + Broker Celery + sessions
@@ -41,7 +41,7 @@ VPS (Hostinger / OVH)
 
 > **Note PIPEDA :** Choisir un VPS avec datacenter au Canada si possible (OVH Beauharnois QC, ou Hostinger région US-Est la plus proche). Documenter la localisation des données dans la politique de confidentialité.
 
-> **RAM minimale recommandée :** 2 GB pour faire tourner FastAPI + Celery + Redis + PostgreSQL simultanément.
+> **RAM minimale recommandée :** 2 GB pour faire tourner FastAPI + Celery + Redis + PostgreSQL simultanément. Le traitement vidéo (ffmpeg) est plus gourmand en CPU/mémoire que le traitement d'image — à surveiller si le volume d'upload vidéo augmente.
 
 ### Backups PostgreSQL
 
@@ -57,14 +57,18 @@ Backups automatisés
 
 ```
 Upload (FastAPI) → R2 Bucket (kyja-beaute)
-                        ├── /gallery/              → Photos coiffures & produits (publiques)
-                        ├── /products/             → Images catalogue (publiques)
+                        ├── /gallery/images/       → Photos coiffures & produits (publiques)
+                        ├── /gallery/videos/       → Courtes vidéos coiffures & produits (publiques)
+                        ├── /products/images/      → Images catalogue (publiques)
+                        ├── /products/videos/      → Vidéos catalogue (publiques)
                         ├── /deliveries/           → Preuves de livraison (accès admin)
                         ├── /portfolios/pending/   → Upload initial coiffeuse (privé)
                         └── /portfolios/approved/  → Validé par admin, visible aux clientes
 
-Accès client → CDN Cloudflare → cache géographique → image servie en < 100ms
+Accès client → CDN Cloudflare → cache géographique → média servi en < 100ms (image) / lecture en streaming (vidéo)
 ```
+
+> **Catalogue multimédia (prestations & produits) :** chaque fiche service/produit peut avoir plusieurs images **et** courtes vidéos (démonstration, avant/après — cf. `PRD.md` section 4.D). Contraintes MVP : vidéos courtes uniquement (~1 min max, quelques Mo), pas de streaming adaptatif (pas de Cloudflare Stream en Phase 1) — R2 + CDN suffit pour des clips courts, lus via la balise `<video>` HTML côté Next.js.
 
 **Cycle de vie du portfolio coiffeuse :**
 ```
@@ -76,11 +80,13 @@ Coiffeuse uploade → /portfolios/pending/ (privé)
 **Pipeline d'upload (asynchrone) :**
 ```
 1. Client envoie fichier → FastAPI
-2. FastAPI valide (type MIME, taille max) → retourne 202 Accepted
+2. FastAPI valide (type MIME, taille max, durée max pour vidéo) → retourne 202 Accepted
 3. Fichier stocké temporairement sur disque VPS
-4. Tâche Celery : Pillow optimise l'image
-5. Tâche Celery : upload vers R2 via boto3
-6. URL sauvegardée en base
+4. Tâche Celery selon le type :
+     ├── Image → Pillow (resize, compression, format WebP)
+     └── Vidéo → ffmpeg (compression H.264, plafond de durée/résolution, extraction d'une miniature)
+5. Tâche Celery : upload vers R2 via boto3 (média + miniature vidéo)
+6. URL(s) sauvegardée(s) en base
 ```
 
 ---
@@ -125,16 +131,16 @@ api/
 ├── auth/           → Inscription, login, refresh token, logout, révocation
 ├── clients/        → Profil, historique, droit à l'oubli (PIPEDA)
 ├── bookings/       → Moteur de réservation, détection conflits ressources
-├── services/       → Catalogue prestations + durées
+├── services/       → Catalogue prestations + durées + galerie images/vidéos
 ├── hairdressers/   → Profils, disponibilités, coefficients, portfolio
 ├── resources/      → Bacs de lavage, casques (équipements partagés)
-├── products/       → Catalogue produits, images, prix
+├── products/       → Catalogue produits, images/vidéos, prix
 ├── inventory/      → Stocks, alertes POS, synchronisation
 ├── orders/         → Commandes, livraisons, preuves photo
 ├── finance/        → Commissions, loyers de chaise, réconciliation
 ├── loyalty/        → Points, récompenses, historique
 ├── notifications/  → Email (Resend) + Push (Web Push)
-├── tasks/          → Tâches Celery (rappels RDV, envois email, resize images)
+├── tasks/          → Tâches Celery (rappels RDV, envois email, traitement images/vidéos)
 └── admin/          → Validation portfolio, validation paiements, POS
 ```
 
@@ -163,9 +169,14 @@ hairdressers
   ├── experience_level (coefficient)
   └── payment_records (1→N)
 
+services                              ← prestations du catalogue
+  ├── images (1→N)                    ← galerie photo
+  └── videos (1→N)                    ← démonstration / avant-après
+
 products
   ├── inventory (1→1)
   ├── images (1→N)
+  ├── videos (1→N)                    ← démonstration / avant-après
   └── order_items (1→N)
 
 orders
@@ -182,6 +193,8 @@ refresh_tokens                        ← gestion des sessions
   ├── expires_at
   └── revoked_at
 ```
+
+> **Note modélisation :** `services.videos` et `products.videos` stockent chacun l'URL R2 du fichier compressé **et** celle de la miniature générée par ffmpeg (affichée avant lecture, cohérent avec le pattern `images`).
 
 ### Droit à l'oubli — Anonymisation (pas suppression)
 
@@ -260,8 +273,10 @@ COMMIT;
 
 ### Flux d'authentification
 
+**Décision confirmée :** approche hybride. L'access token (15 min) est transmis en `Authorization: Bearer` et gardé en mémoire côté client (jamais en cookie, jamais en `localStorage`) — il n'est donc jamais auto-envoyé par le navigateur, ce qui dispense les routes protégées par Bearer de toute protection CSRF. Le refresh token (30 jours) est, lui, stocké en cookie HttpOnly — un vol XSS ne peut donc exposer que l'access token (durée de vie max 15 min), jamais le refresh token longue durée. Seule `/auth/refresh` (qui s'appuie sur le cookie) nécessite une protection CSRF.
+
 ```
-Login → FastAPI vérifie bcrypt → JWT Access Token (15 min) + Refresh Token (30 jours, HttpOnly cookie)
+Login → FastAPI vérifie bcrypt → JWT Access Token (15 min, renvoyé dans le corps JSON, gardé en mémoire côté client) + Refresh Token (30 jours, cookie HttpOnly)
       → Refresh token stocké hashé dans la table refresh_tokens
 
 Rotation des tokens :
@@ -286,7 +301,8 @@ Révocation :
 - Rate limiting sur `/auth/login` : 5 tentatives / 15 min par IP (via Redis)
 - HTTPS obligatoire (Certbot + Let's Encrypt sur Nginx)
 - Headers de sécurité : `CSP`, `X-Frame-Options`, `HSTS` configurés dans Nginx
-- Protection CSRF uniquement sur `/auth/refresh` (double-submit cookie). Les autres endpoints sont protégés par le Bearer token JWT.
+- Protection CSRF uniquement sur `/auth/refresh` (double-submit cookie). Les autres endpoints sont protégés par le Bearer token JWT (jamais auto-envoyé par le navigateur, donc pas de surface CSRF).
+- CORS : `Access-Control-Allow-Origin` restreint au domaine exact du frontend (jamais `*`), `Access-Control-Allow-Credentials: true` requis pour que le navigateur envoie le cookie de refresh cross-origin vers `/auth/refresh`.
 - Données sensibles chiffrées au repos : numéros de téléphone, adresses (PostgreSQL `pgcrypto`)
 
 ---
@@ -393,11 +409,11 @@ Next.js configuré avec `next-pwa` :
 - [ ] Projet Next.js + FastAPI initialisés
 - [ ] Schéma PostgreSQL complet + migrations Alembic
 - [ ] Auth (inscription / login / JWT / refresh tokens / révocation)
-- [ ] Catalogue services et produits
+- [ ] Catalogue services et produits (galeries images + vidéos)
 - [ ] Moteur de réservation (conflits coiffeuse + équipement)
 - [ ] Profil client + historique
 - [ ] Interface admin de base
-- [ ] Celery + Celery Beat configurés
+- [ ] Celery + Celery Beat configurés (traitement images via Pillow, vidéos via ffmpeg)
 - [ ] Notifications email (Resend) via Celery
 - [ ] Backups automatisés PostgreSQL → R2
 - [ ] Health check + UptimeRobot
@@ -427,3 +443,4 @@ Next.js configuré avec `next-pwa` :
 | Région exacte du VPS (pour documentation PIPEDA) | À confirmer lors de l'achat |
 | Intégration paiement en ligne (Phase 2+) | Non décidé — Stripe ou PayPal Canada |
 | Langue(s) de l'interface (FR seulement, ou FR + EN ?) | À confirmer |
+| Limites précises vidéo (durée max, poids max, résolution) | À confirmer avant implémentation du module catalogue |
